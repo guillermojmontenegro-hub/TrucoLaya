@@ -1,0 +1,19 @@
+services:
+  api:
+    build: ./backend
+    environment:
+      HF_HOME: /models
+    volumes:
+      - laya-models:/models
+    ports:
+      - "8000:8000"
+  web:
+    build: ./frontend
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+volumes:
+  laya-models:
