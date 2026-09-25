@@ -10,7 +10,7 @@ Necesitás [Python 3.10 o superior](https://www.python.org/downloads/) y [Node.j
 python3 run.py
 ```
 
-El lanzador crea el entorno Python, instala Laya y las dependencias web, inicia ambos servidores y abre <http://localhost:3000>. Las siguientes veces reutiliza lo instalado. Para detener el juego, presioná `Ctrl+C`. No requiere Docker, privilegios de administrador ni comandos distintos para backend y frontend. Se necesita conexión a internet durante la instalación y la primera partida: Laya descarga su checkpoint multilingüe desde Hugging Face en su primera decisión; puede tardar varios minutos y necesita memoria y espacio en disco suficientes. Si falla, el juego muestra el error y permite reintentar. La documentación de la API está en <http://localhost:8000/docs>.
+El lanzador crea el entorno Python, instala Laya y las dependencias web, inicia ambos servidores y abre <http://localhost:3000>. Las siguientes veces reutiliza lo instalado. Para detener el juego, presioná `Ctrl+C`. No requiere Docker, privilegios de administrador ni comandos distintos para backend y frontend. Se necesita conexión a internet durante la instalación y la primera partida: Laya descarga su checkpoint multilingüe desde Hugging Face en su primera decisión; puede tardar varios minutos y necesita memoria y espacio en disco suficientes (aproximadamente 650 MB para el checkpoint). La partida aparece enseguida con el estado «Laya está pensando» mientras se descarga y carga el modelo. Si falla, el juego muestra el error y permite reintentar. La documentación de la API está en <http://localhost:8000/docs>.
 
 Si `python3 -m venv` falla en Debian/Ubuntu, instalá el paquete `python3-venv` del sistema y ejecutá el lanzador otra vez. Para instalar sin iniciar el juego, agregá `--install-only`; para evitar que se abra el navegador, agregá `--no-browser`. Si los puertos 3000 u 8000 están ocupados, elegí otros con `--port 3001 --api-port 8001`.
 
@@ -47,28 +47,33 @@ La app web usa el proxy `/api` de Next.js. Para cambiar la dirección del backen
 
 ## Reglas incluidas
 
-- Baraja española de 40 cartas, tres cartas por jugador, tres bazas y jerarquía argentina de cartas.
+- Baraja española de 40 cartas, tres cartas por jugador, tres manos por reparto y jerarquía argentina de cartas.
 - Partida a 30 puntos. Truco, retruco y vale cuatro; aceptar, rechazar, subir o ir al mazo.
-- Envido simple de dos puntos cuando se acepta, uno si se rechaza. Se permite durante la primera baza antes de que haya truco. El valor de cada equipo es la mejor mano individual de sus integrantes. En empate gana el equipo del jugador mano.
-- Si empatan una baza, la siguiente define; si persiste el empate, prevalece la primera baza ganada o el equipo del mano.
+- Envido simple de dos puntos cuando se acepta, uno si se rechaza. Se permite durante la primera mano antes de que haya truco. El valor de cada equipo es el mejor tanto individual de sus integrantes. En empate gana el equipo del jugador mano.
+- Si empatan una mano, la siguiente define; si persiste el empate, prevalece la primera mano ganada o el equipo del jugador mano.
 
 Esta primera versión omite flor, real envido, falta envido y partidas humanas multijugador. En mesas de 4 o 6, el humano comparte equipo con compañeros Laya. Las partidas viven en memoria del proceso API; reiniciar el servidor las borra.
 
 ## Cómo decide Laya
 
-Laya es un motor de decisiones tipadas, no un modelo que genera texto libre. La [API `Router.predict`](https://github.com/NandhaKishorM/laya#quickstart) recibe un estado y preguntas de tipo `choice`, `score` o `noul`; nuestro adaptador usa **`choice`**. Cada turno, el motor de reglas produce acciones legales como `play:7-espada`, `truco`, `envido`, `accept` o `reject`. Si hay un canto pendiente, Laya decide cómo responder. En otro turno, responde **dos preguntas tipadas en una inferencia**: si conviene jugar, cantar o ir al mazo; y qué carta concreta tirar en esta baza. Para cada carta legal recibe la fuerza argentina de truco, su relación con la carta líder visible y las cartas propias que conservaría. El contexto también incluye cartas jugadas en bazas anteriores, compañeros, puntajes y cartas restantes por jugador. El dominio valida la acción devuelta por Laya antes de ejecutarla.
+Laya es un motor de decisiones tipadas, no un modelo que genera texto libre. La [API `Router.predict`](https://github.com/NandhaKishorM/laya#quickstart) recibe un estado y preguntas de tipo `choice`, `score` o `noul`; nuestro adaptador usa **`choice`**. Cada turno, el motor de reglas produce acciones legales como `play:7-espada`, `truco`, `envido`, `accept` o `reject`. Si hay un canto pendiente, Laya decide cómo responder. En otro turno, responde **dos preguntas tipadas en una inferencia**: si conviene jugar, cantar o ir al mazo; y qué carta concreta tirar en esta mano. Para cada carta legal recibe la fuerza argentina de truco, su relación con la carta líder visible y las cartas propias que conservaría. El contexto también incluye cartas jugadas en manos anteriores, compañeros, puntajes y cartas restantes por jugador. El dominio valida la acción devuelta por Laya antes de ejecutarla.
 
 Se fuerza `model="multilingual"` para las instrucciones en español. El `Router` se crea al primer turno de IA y reutiliza el modelo durante el proceso. El checkpoint base es generalista y no fue entrenado específicamente para truco: sus jugadas pueden ser débiles. Para mejorar estrategia, se podría recopilar partidas etiquetadas y ajustar un checkpoint de Laya siguiendo su [guía de fine-tuning](https://github.com/NandhaKishorM/laya#fine-tune-for-better-accuracy). El backend nunca envía a la IA cartas ocultas de otros jugadores.
 
+El botón **Ver Laya** abre el registro de decisiones de la partida. Muestra la acción ejecutada, las opciones de intención o respuesta que evaluó Laya, sus probabilidades, la confianza reportada, el modelo utilizado, los tokens de entrada y la duración. No muestra razonamientos escritos porque Laya no los genera ni expone cartas ocultas. Si sólo había una acción legal, el registro lo indica como decisión por reglas.
+
+La primera carga del checkpoint puede superar el tiempo límite del proxy web. Por eso `POST /games` devuelve el estado de inmediato y `GameService` ejecuta los turnos de Laya en un hilo de fondo. La web consulta `GET /games/{id}` hasta recibir `botThinking: false`; si hay un error de carga o inferencia, muestra `botError` y permite reintentar con `POST /games/{id}/retry`.
+
 ## Mesa y cartas jugadas
 
-Cada rival muestra el dorso de las cartas que aún tiene en la mano. Cada carta tirada queda boca arriba en su posición de la mesa; las cartas de la segunda y tercera baza se apoyan sobre las anteriores del mismo jugador con un desplazamiento para que sigan visibles. Este comportamiento sigue el [reglamento consultado](https://www.casi.com.ar/sites/default/files/Reglamento%20Truco.pdf), que indica que las bazas no se recogen y permanecen delante de quien las jugó. La interfaz usa símbolos propios de la baraja española, sin palos de póker.
+Cada rival muestra el dorso de las cartas que aún tiene en la mano. Cada carta tirada queda boca arriba en su posición de la mesa; las cartas de la segunda y tercera mano se apoyan sobre las anteriores del mismo jugador con un desplazamiento para que sigan visibles. Este comportamiento sigue el [reglamento consultado](https://www.casi.com.ar/sites/default/files/Reglamento%20Truco.pdf), que indica que las cartas jugadas no se recogen y permanecen delante de quien las jugó. La interfaz usa símbolos propios de la baraja española, sin palos de póker. En pantallas anchas, la mesa y los controles se distribuyen en dos columnas.
 
 ## Arquitectura
 
 ```text
 frontend/ (Next.js, React, TypeScript)
   app/page.tsx       interfaz y cliente HTTP
+  app/LayaLog.tsx    registro de decisiones visible para el jugador
   next.config.ts     proxy /api hacia el backend
             │
             ▼
@@ -83,7 +88,7 @@ backend/truco/ai.py       puerto DecisionMaker + adaptador Laya
 
 `run.py` prepara las dependencias y administra los dos procesos locales.
 
-El dominio no importa FastAPI ni Laya. `GameService` depende del contrato `DecisionMaker`, lo que permite probar partidas con una implementación determinista. El adaptador Laya sólo conoce las acciones legales y el estado público que necesita. Cada sesión tiene un bloqueo para evitar dos acciones simultáneas; las sesiones se guardan en memoria. Para desplegar múltiples réplicas del backend se necesitaría un almacén compartido y un mecanismo de bloqueo distribuido.
+El dominio no importa FastAPI ni Laya. `GameService` depende del contrato `DecisionMaker`, lo que permite probar partidas con una implementación determinista. El adaptador Laya sólo conoce las acciones legales y el estado público que necesita. Cada sesión tiene un bloqueo para aplicar acciones y registrar decisiones sin mezclar turnos; la inferencia lenta ocurre fuera del bloqueo para que la API pueda responder las consultas de estado. Las sesiones se guardan en memoria. Para desplegar múltiples réplicas del backend se necesitaría un almacén compartido y un mecanismo de bloqueo distribuido.
 
 ## Calidad y entrega
 

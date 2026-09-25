@@ -7,7 +7,7 @@ function point(index: number, count: number): CSSProperties {
   const angle = Math.PI / 2 - (index * Math.PI * 2) / count;
   return {
     "--spot-left": `${50 + Math.cos(angle) * 29}%`,
-    "--spot-top": `${50 + Math.sin(angle) * 31}%`,
+    "--spot-top": `${50 + Math.sin(angle) * 25}%`,
     "--spot-left-mobile": `${50 + Math.cos(angle) * 29}%`,
   } as CSSProperties;
 }
@@ -39,7 +39,7 @@ function PlayedPile({ state, index }: { state: GameState; index: number }) {
 
 export function Table({ state }: { state: GameState }) {
   return <section className="table-panel" aria-label="Mesa de juego">
-    <div className="table-topline"><span>MESA · {state.players.length} JUGADORES</span><div className="trick-progress">{[0, 1, 2].map(index => <span className={index === state.trick && !state.handOver ? "current" : state.trickWinners[index] !== undefined ? "done" : ""} key={index}>{index + 1}ª baza{state.trickWinners[index] !== undefined && <b>{state.trickWinners[index] === null ? "· parda" : `· E${state.trickWinners[index]! + 1}`}</b>}</span>)}</div></div>
+    <div className="table-topline"><span>MESA · {state.players.length} JUGADORES</span><div className="trick-progress">{[0, 1, 2].map(index => <span className={index === state.trick && !state.handOver ? "current" : state.trickWinners[index] !== undefined ? "done" : ""} key={index}>{index + 1}ª mano{state.trickWinners[index] !== undefined && <b>{state.trickWinners[index] === null ? "· parda" : `· E${state.trickWinners[index]! + 1}`}</b>}</span>)}</div></div>
     <div className="opponent-rail">{state.players.slice(1).map((player, offset) => <Seat key={offset + 1} player={player} index={offset + 1} active={state.turn === offset + 1 && !state.handOver} />)}</div>
     <div className="arena"><div className="arena-grain" /><div className="center-seal"><span>TRUCO</span><strong>LAYA</strong><i>EST. 2026</i></div>
       {state.players.map((_, index) => <PlayedPile key={index} state={state} index={index} />)}

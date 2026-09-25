@@ -103,7 +103,7 @@ class Game:
         self.envido_called = False
         self.envido_result = None
         self.hand_over = False
-        self.message = "Nueva mano."
+        self.message = "Nuevo reparto."
 
     def legal_actions(self, index: int) -> list[str]:
         if self.hand_over or self.winner is not None:
@@ -204,12 +204,12 @@ class Game:
         self.history.append(self.table)
         self.table = []
         self.trick += 1
-        self.message = "Parda." if winner is None else f"Baza para equipo {winner + 1}."
+        self.message = "Parda." if winner is None else f"Mano para equipo {winner + 1}."
         hand_winner = self._hand_winner()
         if hand_winner is not None:
             self._award(hand_winner, self.truco_level + 1)
             self.hand_over = True
-            self.message += f" Mano para equipo {hand_winner + 1}."
+            self.message += f" Reparto para equipo {hand_winner + 1}."
         else:
             if winner is not None:
                 self.starter = next(index for index, card in self.history[-1] if self.players[index].team == winner and card.power == maximum)

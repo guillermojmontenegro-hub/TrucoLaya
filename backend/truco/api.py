@@ -50,6 +50,14 @@ def get_game(game_id: str) -> dict:
         raise failure(error) from error
 
 
+@app.get("/games/{game_id}/laya-log")
+def get_laya_log(game_id: str) -> dict:
+    try:
+        return service.log(game_id)
+    except KeyError as error:
+        raise failure(error) from error
+
+
 @app.post("/games/{game_id}/actions")
 def act(game_id: str, body: Action) -> dict:
     try:
@@ -62,5 +70,13 @@ def act(game_id: str, body: Action) -> dict:
 def next_hand(game_id: str) -> dict:
     try:
         return service.next_hand(game_id)
+    except Exception as error:
+        raise failure(error) from error
+
+
+@app.post("/games/{game_id}/retry")
+def retry_bot_turn(game_id: str) -> dict:
+    try:
+        return service.retry_bots(game_id)
     except Exception as error:
         raise failure(error) from error

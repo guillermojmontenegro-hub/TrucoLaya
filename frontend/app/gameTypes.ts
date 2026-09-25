@@ -19,4 +19,6 @@ export type GameState = {
   winner: number | null;
   message: string;
   legalActions: string[];
+  botThinking: boolean;
+  botError: string | null;
 };

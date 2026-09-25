@@ -2,13 +2,37 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from threading import Lock
+from time import perf_counter
 from typing import Protocol
 
 from truco.domain import Card, Game, envido_points
 
 
 class DecisionMaker(Protocol):
-    def choose(self, game: Game, player: int) -> str: ...
+    def choose(self, game: Game, player: int) -> Decision: ...
+
+
+@dataclass(frozen=True)
+class Decision:
+    action: str
+    model: str = "reglas"
+    intent: str | None = None
+    choice_type: str = "única acción legal"
+    probability: float | None = None
+    confidence: float | None = None
+    alternatives: dict[str, float] = field(default_factory=dict)
+    input_tokens: int | None = None
+    elapsed_ms: float | None = None
+
+
+def probabilities(answer: dict) -> dict[str, float]:
+    return {
+        str(option): float(value)
+        for option, value in answer.get("probabilities", {}).items()
+        if isinstance(value, (int, float))
+    }
 
 
 def card_name(card: Card) -> str:
@@ -94,16 +118,12 @@ def card_criteria(game: Game, player: int, actions: list[str]) -> dict[str, str]
 class LayaDecisionMaker:
     def __init__(self) -> None:
         self._router = None
+        self._lock = Lock()
 
-    def choose(self, game: Game, player: int) -> str:
+    def choose(self, game: Game, player: int) -> Decision:
         actions = game.legal_actions(player)
         if len(actions) == 1:
-            return actions[0]
-        if self._router is None:
-            from laya import Router
-
-            self._router = Router()
-
+            return Decision(actions[0])
         context = position(game, player)
         if game.pending:
             descriptions = {
@@ -139,10 +159,37 @@ class LayaDecisionMaker:
                 }
             answer_key = "intencion"
 
-        result = self._router.predict(context, questions, model="multilingual", max_len=2048)
-        answer = result["answers"][answer_key]["choice"]
+        with self._lock:
+            if self._router is None:
+                from laya import Router
+
+                self._router = Router()
+            started = perf_counter()
+            result = self._router.predict(context, questions, model="multilingual", max_len=2048)
+            elapsed_ms = round((perf_counter() - started) * 1000, 1)
+        primary_answer = result["answers"][answer_key]
+        answer = primary_answer["choice"]
+        intent = answer
+        selected_answer = primary_answer
+        choice_type = "respuesta" if game.pending else "intención"
         if not game.pending and answer == "play":
-            answer = result["answers"]["carta"]["choice"] if "carta" in questions else plays[0]
+            if "carta" in questions:
+                selected_answer = result["answers"]["carta"]
+                answer = selected_answer["choice"]
+                choice_type = "carta"
+            else:
+                answer = plays[0]
         if answer not in actions:
             raise RuntimeError(f"Laya devolvió una acción no permitida: {answer}")
-        return answer
+        selected_probabilities = probabilities(selected_answer)
+        return Decision(
+            action=answer,
+            model=result.get("routing", {}).get("model", "multilingual"),
+            intent=intent,
+            choice_type=choice_type,
+            probability=selected_probabilities.get(answer if choice_type == "carta" else intent),
+            confidence=selected_answer.get("confidence"),
+            alternatives=probabilities(primary_answer),
+            input_tokens=result.get("usage", {}).get("input_tokens"),
+            elapsed_ms=elapsed_ms,
+        )

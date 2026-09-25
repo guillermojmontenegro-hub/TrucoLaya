@@ -1,15 +1,17 @@
 from random import Random
+from time import monotonic, sleep
 
 import pytest
 
-from truco.ai import LayaDecisionMaker, position
+from truco.ai import Decision, LayaDecisionMaker, position
 from truco.domain import Card, Game, InvalidMove, envido_points
 from truco.service import GameService
 
 
 class FirstLegalDecision:
-    def choose(self, game: Game, player: int) -> str:
-        return next((action for action in game.legal_actions(player) if action.startswith("play:")), game.legal_actions(player)[0])
+    def choose(self, game: Game, player: int) -> Decision:
+        action = next((action for action in game.legal_actions(player) if action.startswith("play:")), game.legal_actions(player)[0])
+        return Decision(action=action, model="prueba")
 
 
 def test_deal_and_team_layout():
@@ -37,9 +39,14 @@ def test_envido_value():
 def test_service_completes_game_with_bot_port():
     service = GameService(FirstLegalDecision())
     game_id, state = service.create(6)
-    for _ in range(250):
-        if state["winner"] is not None:
-            break
+    deadline = monotonic() + 10
+    while state["winner"] is None:
+        assert monotonic() < deadline
+        if state["botThinking"]:
+            sleep(0.001)
+            state = service.get(game_id)
+            continue
+        assert state["botError"] is None
         if state["handOver"]:
             state = service.next_hand(game_id)
         else:
@@ -63,11 +70,23 @@ def test_laya_adapter_selects_only_legal_action():
             assert "cartas_propias" in context
             assert "historial_bazas" in context
             assert "cartas" not in context
-            return {"answers": {"intencion": {"choice": "play"}, "carta": {"choice": chosen}}}
+            return {
+                "answers": {
+                    "intencion": {"choice": "play", "probabilities": {"play": 0.8, "fold": 0.2}},
+                    "carta": {"choice": chosen, "probabilities": {chosen: 0.67}, "confidence": 0.41},
+                },
+                "routing": {"model": "multilingual"},
+                "usage": {"input_tokens": 123},
+            }
 
     adapter = LayaDecisionMaker()
     adapter._router = RouterStub()
-    assert adapter.choose(game, game.turn) == chosen
+    decision = adapter.choose(game, game.turn)
+    assert decision.action == chosen
+    assert decision.intent == "play"
+    assert decision.probability == 0.67
+    assert decision.alternatives == {"play": 0.8, "fold": 0.2}
+    assert decision.input_tokens == 123
 
 
 def test_played_cards_remain_in_history_when_next_trick_starts():
