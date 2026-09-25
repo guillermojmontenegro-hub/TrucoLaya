@@ -2,17 +2,11 @@
 
 Juego web de truco argentino para **2, 4 o 6 jugadores**. Un humano ocupa el primer asiento; los demás son jugadores de IA controlados por [Laya](https://github.com/NandhaKishorM/laya). Los equipos se alternan alrededor de la mesa: asientos pares contra impares.
 
-## Instalación sin Docker (Windows, Linux y macOS)
+## Instalación sin Docker (Linux y macOS)
 
 Necesitás [Python 3.10 o superior](https://www.python.org/downloads/) y [Node.js 20.9 o superior con npm](https://nodejs.org/en/download). [Descargá el proyecto como ZIP](https://github.com/guillermojmontenegro-hub/TrucoLaya/archive/refs/heads/main.zip) y descomprimilo, o clonalo con Git. Después abrí una terminal en la carpeta `TrucoLaya` y ejecutá **un solo comando**:
 
-```powershell
-# Windows (PowerShell)
-py -3 run.py
-```
-
 ```bash
-# Linux y macOS
 python3 run.py
 ```
 
@@ -62,9 +56,13 @@ Esta primera versión omite flor, real envido, falta envido y partidas humanas m
 
 ## Cómo decide Laya
 
-Laya es un motor de decisiones tipadas, no un modelo que genera texto libre. La [API `Router.predict`](https://github.com/NandhaKishorM/laya#quickstart) recibe un estado y preguntas de tipo `choice`, `score` o `noul`; nuestro adaptador usa **`choice`**. Cada turno, el motor de reglas produce acciones legales como `play:7-espada`, `truco`, `envido`, `accept` o `reject`. El adaptador entrega a Laya una pregunta con **sólo esas opciones** y un contexto en español: cartas propias, cartas públicas en la mesa, bazas, puntajes, nivel de truco y canto pendiente. Laya devuelve la opción elegida; el dominio vuelve a validarla antes de ejecutar el movimiento.
+Laya es un motor de decisiones tipadas, no un modelo que genera texto libre. La [API `Router.predict`](https://github.com/NandhaKishorM/laya#quickstart) recibe un estado y preguntas de tipo `choice`, `score` o `noul`; nuestro adaptador usa **`choice`**. Cada turno, el motor de reglas produce acciones legales como `play:7-espada`, `truco`, `envido`, `accept` o `reject`. Si hay un canto pendiente, Laya decide cómo responder. En otro turno, responde **dos preguntas tipadas en una inferencia**: si conviene jugar, cantar o ir al mazo; y qué carta concreta tirar en esta baza. Para cada carta legal recibe la fuerza argentina de truco, su relación con la carta líder visible y las cartas propias que conservaría. El contexto también incluye cartas jugadas en bazas anteriores, compañeros, puntajes y cartas restantes por jugador. El dominio valida la acción devuelta por Laya antes de ejecutarla.
 
 Se fuerza `model="multilingual"` para las instrucciones en español. El `Router` se crea al primer turno de IA y reutiliza el modelo durante el proceso. El checkpoint base es generalista y no fue entrenado específicamente para truco: sus jugadas pueden ser débiles. Para mejorar estrategia, se podría recopilar partidas etiquetadas y ajustar un checkpoint de Laya siguiendo su [guía de fine-tuning](https://github.com/NandhaKishorM/laya#fine-tune-for-better-accuracy). El backend nunca envía a la IA cartas ocultas de otros jugadores.
+
+## Mesa y cartas jugadas
+
+Cada rival muestra el dorso de las cartas que aún tiene en la mano. Cada carta tirada queda boca arriba en su posición de la mesa; las cartas de la segunda y tercera baza se apoyan sobre las anteriores del mismo jugador con un desplazamiento para que sigan visibles. Este comportamiento sigue el [reglamento consultado](https://www.casi.com.ar/sites/default/files/Reglamento%20Truco.pdf), que indica que las bazas no se recogen y permanecen delante de quien las jugó. La interfaz usa símbolos propios de la baraja española, sin palos de póker.
 
 ## Arquitectura
 
@@ -83,7 +81,7 @@ backend/truco/ai.py       puerto DecisionMaker + adaptador Laya
        paquete laya / checkpoint multilingüe
 ```
 
-`run.py` prepara las dependencias y administra los dos procesos locales en Windows, Linux y macOS.
+`run.py` prepara las dependencias y administra los dos procesos locales.
 
 El dominio no importa FastAPI ni Laya. `GameService` depende del contrato `DecisionMaker`, lo que permite probar partidas con una implementación determinista. El adaptador Laya sólo conoce las acciones legales y el estado público que necesita. Cada sesión tiene un bloqueo para evitar dos acciones simultáneas; las sesiones se guardan en memoria. Para desplegar múltiples réplicas del backend se necesitaría un almacén compartido y un mecanismo de bloqueo distribuido.
 

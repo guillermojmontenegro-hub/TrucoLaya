@@ -1,0 +1,22 @@
+export type Suit = "espada" | "basto" | "oro" | "copa";
+export type Card = { id: string; rank: number; suit: Suit };
+export type Player = { name: string; team: number; human: boolean; cards: Card[] | null; cardCount: number };
+export type Played = { player: number; card: Card };
+export type GameState = {
+  players: Player[];
+  scores: number[];
+  target: number;
+  dealer: number;
+  turn: number;
+  trick: number;
+  table: Played[];
+  history: Played[][];
+  trickWinners: (number | null)[];
+  trucoLevel: number;
+  pending: { kind: string; level?: number; team: number } | null;
+  envidoResult: { points: number[]; winner: number } | null;
+  handOver: boolean;
+  winner: number | null;
+  message: string;
+  legalActions: string[];
+};

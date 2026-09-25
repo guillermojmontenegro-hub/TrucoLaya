@@ -2,7 +2,7 @@ from random import Random
 
 import pytest
 
-from truco.ai import LayaDecisionMaker
+from truco.ai import LayaDecisionMaker, position
 from truco.domain import Card, Game, InvalidMove, envido_points
 from truco.service import GameService
 
@@ -51,16 +51,45 @@ def test_service_completes_game_with_bot_port():
 
 def test_laya_adapter_selects_only_legal_action():
     game = Game.create(2, Random(7))
-    chosen = game.legal_actions(game.turn)[0]
+    chosen = [action for action in game.legal_actions(game.turn) if action.startswith("play:")][-1]
 
     class RouterStub:
-        def predict(self, context, questions, model):
+        def predict(self, context, questions, model, max_len):
             assert model == "multilingual"
-            assert "jugada" in questions
+            assert max_len == 2048
+            assert "intencion" in questions
+            assert "carta" in questions
+            assert chosen in questions["carta"]["criteria"]
             assert "cartas_propias" in context
+            assert "historial_bazas" in context
             assert "cartas" not in context
-            return {"answers": {"jugada": {"choice": chosen}}}
+            return {"answers": {"intencion": {"choice": "play"}, "carta": {"choice": chosen}}}
 
     adapter = LayaDecisionMaker()
     adapter._router = RouterStub()
     assert adapter.choose(game, game.turn) == chosen
+
+
+def test_played_cards_remain_in_history_when_next_trick_starts():
+    game = Game.create(2, Random(18))
+    for _ in range(2):
+        index = game.turn
+        game.act(index, next(action for action in game.legal_actions(index) if action.startswith("play:")))
+    assert len(game.view()["history"]) == 1
+    assert game.view()["table"] == []
+    index = game.turn
+    game.act(index, next(action for action in game.legal_actions(index) if action.startswith("play:")))
+    assert len(game.view()["history"][0]) == 2
+    assert len(game.view()["table"]) == 1
+
+
+def test_laya_context_uses_visible_history_and_no_opponent_hand():
+    game = Game.create(2, Random(19))
+    index = game.turn
+    game.act(index, next(action for action in game.legal_actions(index) if action.startswith("play:")))
+    context = position(game, index)
+    assert len(context["cartas_propias"]) == 2
+    assert len(context["mesa_actual"]) == 1
+    assert context["historial_bazas"] == []
+    assert "cartas" not in context["cartas_restantes"][0]
+    assert context["jugador_mano"] == game.players[(game.dealer + 1) % 2].name
