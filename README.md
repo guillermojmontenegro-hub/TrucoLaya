@@ -2,9 +2,25 @@
 
 Juego web de truco argentino para **2, 4 o 6 jugadores**. Un humano ocupa el primer asiento; los demás son jugadores de IA controlados por [Laya](https://github.com/NandhaKishorM/laya). Los equipos se alternan alrededor de la mesa: asientos pares contra impares.
 
-## Instalación rápida
+## Instalación sin Docker (Windows, Linux y macOS)
 
-Requisitos: Docker y Docker Compose, conexión a internet en el primer arranque y memoria suficiente para el checkpoint de Laya.
+Necesitás [Python 3.10 o superior](https://www.python.org/downloads/) y [Node.js 20.9 o superior con npm](https://nodejs.org/en/download). [Descargá el proyecto como ZIP](https://github.com/guillermojmontenegro-hub/TrucoLaya/archive/refs/heads/main.zip) y descomprimilo, o clonalo con Git. Después abrí una terminal en la carpeta `TrucoLaya` y ejecutá **un solo comando**:
+
+```powershell
+# Windows (PowerShell)
+py -3 run.py
+```
+
+```bash
+# Linux y macOS
+python3 run.py
+```
+
+El lanzador crea el entorno Python, instala Laya y las dependencias web, inicia ambos servidores y abre <http://localhost:3000>. Las siguientes veces reutiliza lo instalado. Para detener el juego, presioná `Ctrl+C`. No requiere Docker, privilegios de administrador ni comandos distintos para backend y frontend. Se necesita conexión a internet durante la instalación y la primera partida: Laya descarga su checkpoint multilingüe desde Hugging Face en su primera decisión; puede tardar varios minutos y necesita memoria y espacio en disco suficientes. Si falla, el juego muestra el error y permite reintentar. La documentación de la API está en <http://localhost:8000/docs>.
+
+Si `python3 -m venv` falla en Debian/Ubuntu, instalá el paquete `python3-venv` del sistema y ejecutá el lanzador otra vez. Para instalar sin iniciar el juego, agregá `--install-only`; para evitar que se abra el navegador, agregá `--no-browser`. Si los puertos 3000 u 8000 están ocupados, elegí otros con `--port 3001 --api-port 8001`.
+
+### Opción con Docker
 
 ```bash
 git clone https://github.com/guillermojmontenegro-hub/TrucoLaya.git
@@ -12,9 +28,9 @@ cd TrucoLaya
 docker compose up --build
 ```
 
-Abrí <http://localhost:3000>. La primera decisión de IA descarga el checkpoint multilingüe de Laya desde Hugging Face y puede tardar varios minutos; después queda en el volumen `laya-models`. El juego no sustituye Laya por movimientos aleatorios si falla la descarga o la inferencia: muestra el error y permite reintentar. La API de desarrollo y su documentación OpenAPI están en <http://localhost:8000/docs>.
+En Docker, el checkpoint descargado queda en el volumen `laya-models`.
 
-### Desarrollo sin Docker
+### Desarrollo manual
 
 Requisitos: Python 3.12, Node.js 22 y npm.
 
@@ -66,6 +82,8 @@ backend/truco/ai.py       puerto DecisionMaker + adaptador Laya
             ▼
        paquete laya / checkpoint multilingüe
 ```
+
+`run.py` prepara las dependencias y administra los dos procesos locales en Windows, Linux y macOS.
 
 El dominio no importa FastAPI ni Laya. `GameService` depende del contrato `DecisionMaker`, lo que permite probar partidas con una implementación determinista. El adaptador Laya sólo conoce las acciones legales y el estado público que necesita. Cada sesión tiene un bloqueo para evitar dos acciones simultáneas; las sesiones se guardan en memoria. Para desplegar múltiples réplicas del backend se necesitaría un almacén compartido y un mecanismo de bloqueo distribuido.
 
