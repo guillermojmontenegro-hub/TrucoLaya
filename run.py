@@ -14,6 +14,7 @@ import sys
 import time
 import venv
 import webbrowser
+from collections import deque
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -34,7 +35,18 @@ def fingerprint(path: Path) -> str:
 
 def command(args: list[str], cwd: Path = ROOT) -> None:
     print("→", " ".join(args), flush=True)
-    subprocess.run(args, cwd=cwd, check=True)
+    recent: deque[str] = deque(maxlen=12)
+    with subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace") as process:
+        assert process.stdout is not None
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            recent.append(line.strip())
+        result = process.wait()
+    if result:
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            detail = " | ".join(recent).replace("%", "%25").replace("\r", "").replace("\n", " ")
+            print(f"::error title=Instalación fallida::{detail[-4000:]}", flush=True)
+        raise subprocess.CalledProcessError(result, args)
 
 
 def check_requirements() -> tuple[str, str]:
