@@ -235,9 +235,12 @@ footer span { color:var(--gold); margin:0 10px; }
   .laya-toggle { padding:7px 10px; }
   .game-format { font-size:8px; padding:7px 9px; }
   .scoreboard { min-height:83px; padding:12px 13px; }
+  .game-sidebar .scoreboard { padding:12px 10px; }
   .score-team { gap:6px; }
   .team-token { width:28px; height:28px; font-size:10px; }
+  .game-sidebar .team-token { width:28px; height:28px; font-size:10px; }
   .score-team strong { font-size:30px; }
+  .game-sidebar .score-team strong { font-size:30px; }
   .score-team small,.score-center { font-size:8px; }
   .table-panel { padding:7px; }
   .table-topline { flex-direction:column; gap:8px; }
@@ -269,6 +272,7 @@ footer span { color:var(--gold); margin:0 10px; }
   .compact .face-footer { font-size:6px; }
   .you-marker { bottom:3%; font-size:8px; }
   .hand-dock { padding:17px 13px; }
+  .game-sidebar .hand-dock { padding:17px 12px; }
   .hand-info h2 { font-size:20px; }
   .your-backs small { display:none; }
   .hand-cards { gap:7px; min-height:126px; }
